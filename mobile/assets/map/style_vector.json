@@ -1,0 +1,192 @@
+{
+  "version": 8,
+  "name": "ResQNet Clear Vector Navigation Map",
+  "center": [-122.4194, 37.7749],
+  "zoom": 12,
+  "glyphs": "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  "sources": {
+    "carto_voyager_tiles": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "attribution": "© OpenStreetMap contributors © CARTO"
+    },
+    "shelters_source": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": []
+      },
+      "cluster": true,
+      "clusterMaxZoom": 14,
+      "clusterRadius": 50
+    },
+    "hospitals_source": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": []
+      },
+      "cluster": true,
+      "clusterMaxZoom": 14,
+      "clusterRadius": 50
+    },
+    "user_location_source": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": []
+      }
+    },
+    "emergency_radius_source": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": []
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "carto_voyager_base_layer",
+      "type": "raster",
+      "source": "carto_voyager_tiles",
+      "minzoom": 0,
+      "maxzoom": 19
+    },
+    {
+      "id": "emergency_radius_fill",
+      "type": "fill",
+      "source": "emergency_radius_source",
+      "paint": {
+        "fill-color": "#2563EB",
+        "fill-opacity": 0.2
+      }
+    },
+    {
+      "id": "emergency_radius_outline",
+      "type": "line",
+      "source": "emergency_radius_source",
+      "paint": {
+        "line-color": "#1D4ED8",
+        "line-width": 2,
+        "line-dasharray": [2, 2]
+      }
+    },
+    {
+      "id": "shelter_clusters",
+      "type": "circle",
+      "source": "shelters_source",
+      "filter": ["has", "point_count"],
+      "paint": {
+        "circle-color": "#2563EB",
+        "circle-radius": [
+          "step",
+          ["get", "point_count"],
+          18,
+          5,
+          24,
+          10,
+          30
+        ],
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "shelter_cluster_count",
+      "type": "symbol",
+      "source": "shelters_source",
+      "filter": ["has", "point_count"],
+      "layout": {
+        "text-field": "{point_count_abbreviated}",
+        "text-size": 12
+      },
+      "paint": {
+        "text-color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "shelter_unclustered",
+      "type": "circle",
+      "source": "shelters_source",
+      "filter": ["!", ["has", "point_count"]],
+      "paint": {
+        "circle-color": "#2563EB",
+        "circle-radius": 12,
+        "circle-stroke-width": 3,
+        "circle-stroke-color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "hospital_clusters",
+      "type": "circle",
+      "source": "hospitals_source",
+      "filter": ["has", "point_count"],
+      "paint": {
+        "circle-color": "#DC2626",
+        "circle-radius": [
+          "step",
+          ["get", "point_count"],
+          18,
+          5,
+          24,
+          10,
+          30
+        ],
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "hospital_cluster_count",
+      "type": "symbol",
+      "source": "hospitals_source",
+      "filter": ["has", "point_count"],
+      "layout": {
+        "text-field": "{point_count_abbreviated}",
+        "text-size": 12
+      },
+      "paint": {
+        "text-color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "hospital_unclustered",
+      "type": "circle",
+      "source": "hospitals_source",
+      "filter": ["!", ["has", "point_count"]],
+      "paint": {
+        "circle-color": "#DC2626",
+        "circle-radius": 12,
+        "circle-stroke-width": 3,
+        "circle-stroke-color": "#FFFFFF"
+      }
+    },
+    {
+      "id": "user_location_pulse",
+      "type": "circle",
+      "source": "user_location_source",
+      "paint": {
+        "circle-color": "#10B981",
+        "circle-radius": 22,
+        "circle-opacity": 0.25
+      }
+    },
+    {
+      "id": "user_location_dot",
+      "type": "circle",
+      "source": "user_location_source",
+      "paint": {
+        "circle-color": "#10B981",
+        "circle-radius": 10,
+        "circle-stroke-width": 3,
+        "circle-stroke-color": "#FFFFFF"
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "model_version": "v1.0.0-8bit-quantized",
+  "trained_at": "2026-07-28T15:08:51.292001",
+  "input_features": [
+    "distance_km",
+    "capacity",
+    "occupancy",
+    "hazard_rating",
+    "generators",
+    "water_liters",
+    "medical_kits"
+  ],
+  "quantized_weights": [
+    -0.385,
+    0.12,
+    -0.29,
+    -0.245,
+    0.15,
+    0.18,
+    0.165
+  ],
+  "bias": 0.52,
+  "sample_count": 500
+}

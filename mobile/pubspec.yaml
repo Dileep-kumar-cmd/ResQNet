@@ -1,0 +1,32 @@
+name: mobile
+description: ResQNet Offline-First AI Disaster Management Platform Mobile Client
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  sqflite: ^2.3.2
+  sqflite_common_ffi: ^2.3.2+1
+  path_provider: ^2.1.2
+  path: ^1.9.0
+  flutter_secure_storage: ^9.0.0
+  crypto: ^3.0.3
+  http: ^1.2.0
+  latlong2: ^0.9.0
+  provider: ^6.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/map/
+
