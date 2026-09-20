@@ -84,7 +84,7 @@ class SyncService extends ChangeNotifier {
 
     for (final host in hosts) {
       try {
-        final url = 'http://$host/api/v1/sync/push';
+        final url = ApiConfig.formatUrl(host, '/api/v1/sync/push');
         debugPrint('[SYNC_DEBUG] Attempting sync push to $url...');
         response = await http.post(
           Uri.parse(url),

@@ -69,7 +69,7 @@ class AuthService extends ChangeNotifier {
       for (final host in hosts) {
         try {
           final response = await http.post(
-            Uri.parse('http://$host/api/v1/auth/login'),
+            Uri.parse(ApiConfig.formatUrl(host, '/api/v1/auth/login')),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'email': email, 'password': password}),
           ).timeout(const Duration(seconds: 4));
@@ -115,7 +115,7 @@ class AuthService extends ChangeNotifier {
       for (final host in hosts) {
         try {
           final response = await http.post(
-            Uri.parse('http://$host/api/v1/auth/register'),
+            Uri.parse(ApiConfig.formatUrl(host, '/api/v1/auth/register')),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'email': email,

@@ -348,13 +348,18 @@ class _EmergencyHqTabState extends State<EmergencyHqTab> {
                     children: [
                       ActionChip(
                         backgroundColor: const Color(0xFF1E293B),
-                        label: const Text('Wi-Fi LAN (192.168.51.229:8000)', style: TextStyle(color: Colors.cyanAccent, fontSize: 11)),
-                        onPressed: () => setDialogState(() => hostCtrl.text = '192.168.51.229:8000'),
+                        label: const Text('Cloud (resqnet-hhmk.onrender.com)', style: TextStyle(color: Colors.greenAccent, fontSize: 11)),
+                        onPressed: () => setDialogState(() => hostCtrl.text = 'https://resqnet-hhmk.onrender.com'),
                       ),
                       ActionChip(
                         backgroundColor: const Color(0xFF1E293B),
                         label: const Text('USB adb reverse (127.0.0.1:8000)', style: TextStyle(color: Colors.amberAccent, fontSize: 11)),
                         onPressed: () => setDialogState(() => hostCtrl.text = '127.0.0.1:8000'),
+                      ),
+                      ActionChip(
+                        backgroundColor: const Color(0xFF1E293B),
+                        label: const Text('Wi-Fi LAN (192.168.51.229:8000)', style: TextStyle(color: Colors.cyanAccent, fontSize: 11)),
+                        onPressed: () => setDialogState(() => hostCtrl.text = '192.168.51.229:8000'),
                       ),
                     ],
                   ),
@@ -376,8 +381,8 @@ class _EmergencyHqTabState extends State<EmergencyHqTab> {
                   onPressed: () async {
                     setDialogState(() => testStatus = 'Testing connection...');
                     try {
-                      final url = 'http://${hostCtrl.text.trim()}/api/v1/health';
-                      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 3));
+                      final url = ApiConfig.formatUrl(hostCtrl.text.trim(), '/api/v1/health');
+                      final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
                       if (res.statusCode == 200) {
                         setDialogState(() => testStatus = '✓ Online & Reachable (200 OK)');
                       } else {
