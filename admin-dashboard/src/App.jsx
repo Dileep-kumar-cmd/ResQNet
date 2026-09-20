@@ -28,6 +28,9 @@ import {
   BellRing
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const WS_BASE = import.meta.env.VITE_WS_URL || API_BASE.replace(/^http/, 'ws');
+
 export default function App() {
   // Navigation active tab: 'overview' | 'shelters' | 'sos' | 'mesh' | 'resources'
   const [activeTab, setActiveTab] = useState('overview');
@@ -134,7 +137,7 @@ export default function App() {
     setIsRefreshing(true);
     try {
       // 1. Health check
-      const resHealth = await fetch('http://127.0.0.1:8000/api/v1/health');
+      const resHealth = await fetch(`${API_BASE}/api/v1/health`);
       if (resHealth.ok) {
         setServerStatus('ONLINE');
       } else {
@@ -142,14 +145,14 @@ export default function App() {
       }
 
       // 2. Shelters
-      const resShelters = await fetch('http://127.0.0.1:8000/api/v1/admin/shelters');
+      const resShelters = await fetch(`${API_BASE}/api/v1/admin/shelters`);
       if (resShelters.ok) {
         const data = await resShelters.json();
         setShelters(data);
       }
 
       // 3. SOS Logs
-      const resSos = await fetch('http://127.0.0.1:8000/api/v1/admin/sos_logs');
+      const resSos = await fetch(`${API_BASE}/api/v1/admin/sos_logs`);
       if (resSos.ok) {
         const data = await resSos.json();
         setSosLogs(data);
@@ -168,7 +171,7 @@ export default function App() {
       }
 
       // 4. CRDT Conflict Audits
-      const resConflicts = await fetch('http://127.0.0.1:8000/api/v1/admin/conflicts_audit');
+      const resConflicts = await fetch(`${API_BASE}/api/v1/admin/conflicts_audit`);
       if (resConflicts.ok) {
         const data = await resConflicts.json();
         setConflicts(data);
@@ -188,7 +191,7 @@ export default function App() {
 
     const connectAlertsWebSocket = () => {
       try {
-        ws = new WebSocket('ws://127.0.0.1:8000/api/v1/alerts/ws');
+        ws = new WebSocket(`${WS_BASE}/api/v1/alerts/ws`);
         ws.onopen = () => {
           console.log('[ALERTS_WS] Connected to Emergency Broadcast Stream');
         };
@@ -230,7 +233,7 @@ export default function App() {
   // Shelter Occupancy update
   const handleUpdateOccupancy = async (shelterId, newOccupancy) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/shelters/${shelterId}`, {
+      const res = await fetch(`${API_BASE}/api/v1/admin/shelters/${shelterId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: jsonEncodeSafe({ current_occupancy: Math.max(0, newOccupancy) })
@@ -246,7 +249,7 @@ export default function App() {
   // SOS status update
   const handleUpdateSosStatus = async (sosId, newStatus) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/admin/sos_logs/${sosId}`, {
+      const res = await fetch(`${API_BASE}/api/v1/admin/sos_logs/${sosId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: jsonEncodeSafe({ status: newStatus })
@@ -263,7 +266,7 @@ export default function App() {
   const handleCreateShelter = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/admin/shelters', {
+      const res = await fetch(`${API_BASE}/api/v1/admin/shelters`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: jsonEncodeSafe(newShelterForm)
@@ -289,7 +292,7 @@ export default function App() {
   const handleCreateSos = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/admin/sos_logs', {
+      const res = await fetch(`${API_BASE}/api/v1/admin/sos_logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: jsonEncodeSafe({
