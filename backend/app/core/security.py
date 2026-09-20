@@ -2,7 +2,7 @@ import hashlib
 import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Any
-import jwt
+import jwt  # PyJWT
 from app.core.config import settings
 
 # Salt for simple fallback hashing when bcrypt binary extensions are unavailable
