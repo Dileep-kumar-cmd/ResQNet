@@ -42,13 +42,13 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
 async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).filter(User.email == user_in.email))
     user = result.scalars().first()
-    if not user or not verify_password(user_in.password, user.hashed_password):
+    if not user or not verify_password(user_in.password, str(user.hashed_password)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
     
-    token = create_access_token(subject=user.id)
+    token = create_access_token(subject=str(user.id))
     return TokenResponse(
         access_token=token,
         token_type="bearer",

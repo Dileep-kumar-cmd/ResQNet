@@ -3,6 +3,7 @@ package com.resqnet.mobile
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.resqnet.mobile.map.MapPlatformViewFactory
@@ -269,12 +270,23 @@ class MainActivity : FlutterActivity() {
                             i > burstSamples - 500 -> (burstSamples - i) / 500.0
                             else -> 1.0
                         }
-                        soundData[offset++] = (sampleValue * envelope * Short.MAX_VALUE * 0.95).toInt().toShort()
+                        soundData[offset++] = (sampleValue * envelope * Short.MAX_VALUE * 1.0).toInt().toShort()
                     }
                     if (b < bursts - 1) {
                         for (i in 0 until pauseSamples) {
                             soundData[offset++] = 0
                         }
+                    }
+                }
+
+                // Ensure ALARM stream volume is set to 100% maximum
+                val audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.let { am ->
+                    try {
+                        val maxVol = am.getStreamMaxVolume(android.media.AudioManager.STREAM_ALARM)
+                        am.setStreamVolume(android.media.AudioManager.STREAM_ALARM, maxVol, 0)
+                    } catch (e: Exception) {
+                        Log.w("MainActivity", "Could not adjust STREAM_ALARM volume: ${e.message}")
                     }
                 }
 
@@ -292,6 +304,7 @@ class MainActivity : FlutterActivity() {
                     android.media.AudioTrack.MODE_STATIC,
                     android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
                 )
+                audioTrack.setVolume(1.0f)
                 audioTrack.write(soundData, 0, soundData.size)
                 audioTrack.play()
 

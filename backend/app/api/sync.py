@@ -1,11 +1,33 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from app.db.database import get_db
+from app.db.models import Shelter
 from app.schemas.sync import SyncPushRequest, SyncPushResponse
 from app.crdt.crdt_engine import CRDTMergeEngine
 from app.api.alerts import alert_manager
 
 router = APIRouter()
+
+@router.get("/shelters")
+async def get_sync_shelters(db: AsyncSession = Depends(get_db)):
+    """Allows clients to fetch latest active shelters."""
+    result = await db.execute(select(Shelter))
+    shelters = result.scalars().all()
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "latitude": s.latitude,
+            "longitude": s.longitude,
+            "capacity": s.capacity,
+            "current_occupancy": s.current_occupancy,
+            "hazard_rating": s.hazard_rating,
+            "equipment_json": s.equipment_json or {},
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None
+        }
+        for s in shelters
+    ]
 
 @router.post("/push", response_model=SyncPushResponse)
 async def push_sync(payload: SyncPushRequest, db: AsyncSession = Depends(get_db)):

@@ -1,7 +1,10 @@
 // ignore_for_file: deprecated_member_use
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:mobile/features/navigation/routing_service.dart';
+
+enum NavMapStyle { dark, standard, satellite }
 
 class NavigationScreen extends StatefulWidget {
   final String destinationName;
@@ -28,6 +31,8 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
   late NavigationRoute _route;
   int _currentStepIndex = 0;
   late AnimationController _animController;
+  final MapController _mapController = MapController();
+  NavMapStyle _mapStyle = NavMapStyle.dark;
 
   @override
   void initState() {
@@ -37,6 +42,9 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
     _recalculateRoute();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fitRoute();
+    });
   }
 
   @override
@@ -59,17 +67,87 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
         _currentStepIndex = 0;
       }
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fitRoute());
+  }
+
+  void _fitRoute() {
+    if (_route.polylinePoints.isEmpty) return;
+    try {
+      final bounds = LatLngBounds.fromPoints([
+        LatLng(widget.userLat, widget.userLon),
+        LatLng(widget.destinationLat, widget.destinationLon),
+        ..._route.polylinePoints,
+      ]);
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.only(top: 50, bottom: 90, left: 35, right: 35),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[MAP_FIT_ERROR] $e');
+    }
+  }
+
+  void _selectStep(int idx) {
+    if (idx < 0 || idx >= _route.instructions.length) return;
+    setState(() => _currentStepIndex = idx);
+    if (_route.polylinePoints.isNotEmpty) {
+      final int ptIdx = ((idx + 1) * (_route.polylinePoints.length - 1) / _route.instructions.length)
+          .round()
+          .clamp(0, _route.polylinePoints.length - 1);
+      final pt = _route.polylinePoints[ptIdx];
+      _mapController.move(pt, 16.0);
+    }
   }
 
   void _nextStep() {
     if (_currentStepIndex < _route.instructions.length - 1) {
-      setState(() => _currentStepIndex++);
+      _selectStep(_currentStepIndex + 1);
     }
   }
 
   void _prevStep() {
     if (_currentStepIndex > 0) {
-      setState(() => _currentStepIndex--);
+      _selectStep(_currentStepIndex - 1);
+    }
+  }
+
+  void _cycleMapStyle() {
+    setState(() {
+      switch (_mapStyle) {
+        case NavMapStyle.dark:
+          _mapStyle = NavMapStyle.standard;
+          break;
+        case NavMapStyle.standard:
+          _mapStyle = NavMapStyle.satellite;
+          break;
+        case NavMapStyle.satellite:
+          _mapStyle = NavMapStyle.dark;
+          break;
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _mapStyle == NavMapStyle.dark
+              ? 'Style: Tactical Dark (CARTO)'
+              : (_mapStyle == NavMapStyle.standard ? 'Style: OpenStreetMap Standard' : 'Style: Satellite Imagery'),
+        ),
+        duration: const Duration(seconds: 1),
+        backgroundColor: const Color(0xFF1E293B),
+      ),
+    );
+  }
+
+  String _getTileUrl() {
+    switch (_mapStyle) {
+      case NavMapStyle.standard:
+        return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+      case NavMapStyle.satellite:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      case NavMapStyle.dark:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
     }
   }
 
@@ -80,6 +158,9 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
     final currentStep = _route.instructions.isNotEmpty && _currentStepIndex < _route.instructions.length
         ? _route.instructions[_currentStepIndex]
         : null;
+
+    final centerLat = (widget.userLat + widget.destinationLat) / 2;
+    final centerLon = (widget.userLon + widget.destinationLon) / 2;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B111E),
@@ -107,7 +188,9 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    _isVehicleMode ? 'Switched to Vehicle Rescue Mode (35 km/h)' : 'Switched to Walking Evacuation Mode (5 km/h)',
+                    _isVehicleMode
+                        ? 'Switched to Vehicle Rescue Mode (35 km/h)'
+                        : 'Switched to Walking Evacuation Mode (5 km/h)',
                   ),
                   duration: const Duration(seconds: 2),
                   backgroundColor: const Color(0xFF1E293B),
@@ -206,14 +289,20 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _isVehicleMode ? Colors.amber.shade900.withOpacity(0.4) : Colors.indigo.shade900.withOpacity(0.4),
+                          color: _isVehicleMode
+                              ? Colors.amber.shade900.withOpacity(0.4)
+                              : Colors.indigo.shade900.withOpacity(0.4),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _isVehicleMode ? Colors.amber : Colors.indigoAccent, width: 0.8),
+                          border: Border.all(
+                            color: _isVehicleMode ? Colors.amber : Colors.indigoAccent,
+                            width: 0.8,
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(_isVehicleMode ? Icons.directions_car : Icons.directions_walk, size: 12, color: Colors.white),
+                            Icon(_isVehicleMode ? Icons.directions_car : Icons.directions_walk,
+                                size: 12, color: Colors.white),
                             const SizedBox(width: 4),
                             Text(
                               _isVehicleMode ? 'Vehicle (35 km/h)' : 'Walking (5 km/h)',
@@ -236,7 +325,8 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
                         children: [
                           Icon(Icons.shield_outlined, size: 12, color: Colors.greenAccent),
                           SizedBox(width: 4),
-                          Text('Offline Corridor Verified', style: TextStyle(fontSize: 10, color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                          Text('Offline Corridor Verified',
+                              style: TextStyle(fontSize: 10, color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -246,46 +336,229 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
             ),
           ),
 
-          // Tactical Route Map Vector Visualizer Canvas with HUD overlay
+          // Real Map Visualizer with FlutterMap (Showing real streets, buildings, landmarks)
           Expanded(
             flex: 5,
             child: Stack(
               children: [
-                AnimatedBuilder(
-                  animation: _animController,
-                  builder: (context, child) {
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        return Container(
-                          width: constraints.maxWidth,
-                          height: constraints.maxHeight,
-                          color: const Color(0xFF090D16),
-                          child: CustomPaint(
-                            size: Size(constraints.maxWidth, constraints.maxHeight),
-                            painter: RoutePainter(
-                              route: _route,
-                              userLat: widget.userLat,
-                              userLon: widget.userLon,
-                              activeStepIndex: _currentStepIndex,
-                              pulseValue: _animController.value,
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: LatLng(centerLat, centerLon),
+                    initialZoom: 14.5,
+                    minZoom: 3.0,
+                    maxZoom: 19.0,
+                  ),
+                  children: [
+                    // Real Map Tiles (Carto Dark / OSM / Satellite)
+                    TileLayer(
+                      urlTemplate: _getTileUrl(),
+                      fallbackUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.resqnet.mobile',
+                      maxZoom: 19,
+                    ),
+
+                    // Evacuation Corridor Real Polyline
+                    PolylineLayer(
+                      polylines: [
+                        // Wide cyan safety glow band
+                        Polyline(
+                          points: _route.polylinePoints,
+                          strokeWidth: 8.0,
+                          color: Colors.cyanAccent.withOpacity(0.35),
+                        ),
+                        // Sharp inner route corridor
+                        Polyline(
+                          points: _route.polylinePoints,
+                          strokeWidth: 4.5,
+                          color: const Color(0xFF00E5FF),
+                        ),
+                      ],
+                    ),
+
+                    // Map Navigation Markers
+                    MarkerLayer(
+                      markers: [
+                        // 1. Origin: User Starting Location Marker
+                        Marker(
+                          point: LatLng(widget.userLat, widget.userLon),
+                          width: 80,
+                          height: 80,
+                          child: AnimatedBuilder(
+                            animation: _animController,
+                            builder: (context, child) {
+                              return Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  // Animated pulse ring
+                                  Container(
+                                    width: 30 + 32 * _animController.value,
+                                    height: 30 + 32 * _animController.value,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.cyanAccent.withOpacity(0.3 * (1 - _animController.value)),
+                                      border: Border.all(
+                                        color: Colors.cyanAccent.withOpacity(0.8 * (1 - _animController.value)),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                  // Center location pin
+                                  Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: const Color(0xFF00E5FF),
+                                      border: Border.all(color: Colors.white, width: 2),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.cyanAccent.withOpacity(0.6),
+                                          blurRadius: 8,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(Icons.navigation, size: 14, color: Colors.black),
+                                  ),
+                                  // Label chip
+                                  Positioned(
+                                    top: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0F172A),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.cyanAccent.withOpacity(0.7), width: 0.8),
+                                      ),
+                                      child: const Text(
+                                        'YOU (START)',
+                                        style: TextStyle(
+                                          color: Colors.cyanAccent,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+
+                        // 2. Intermediate Waypoint Checkpoints
+                        ...List.generate(_route.instructions.length, (idx) {
+                          if (idx == _route.instructions.length - 1) return null;
+                          final int ptIdx =
+                              ((idx + 1) * (_route.polylinePoints.length - 1) / _route.instructions.length)
+                                  .round()
+                                  .clamp(0, _route.polylinePoints.length - 1);
+                          final pt = _route.polylinePoints[ptIdx];
+                          final isCurrent = idx == _currentStepIndex;
+
+                          return Marker(
+                            point: pt,
+                            width: 32,
+                            height: 32,
+                            child: GestureDetector(
+                              onTap: () => _selectStep(idx),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: isCurrent ? Colors.cyanAccent : const Color(0xFF1E293B),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isCurrent ? Colors.white : Colors.cyanAccent,
+                                    width: isCurrent ? 2.0 : 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (isCurrent ? Colors.cyanAccent : Colors.black).withOpacity(0.5),
+                                      blurRadius: isCurrent ? 8 : 4,
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${idx + 1}',
+                                    style: TextStyle(
+                                      color: isCurrent ? Colors.black : Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).whereType<Marker>(),
+
+                        // 3. Destination Shelter/Hospital Beacon Marker
+                        Marker(
+                          point: LatLng(widget.destinationLat, widget.destinationLon),
+                          width: 160,
+                          height: 80,
+                          child: GestureDetector(
+                            onTap: () => _selectStep(_route.instructions.length - 1),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDC2626),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.white, width: 1),
+                                    boxShadow: const [BoxShadow(color: Colors.black87, blurRadius: 4)],
+                                  ),
+                                  child: Text(
+                                    widget.destinationName.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDC2626),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.redAccent.withOpacity(0.8),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.place, color: Colors.white, size: 20),
+                                ),
+                              ],
                             ),
                           ),
-                        );
-                      },
-                    );
-                  },
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
 
-                // Tactical HUD Overlay (Compass / North Indicator & Scale)
+                // Tactical HUD Overlay (Compass / Map Type / GPS Status)
                 Positioned(
                   top: 12,
                   left: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A).withOpacity(0.85),
+                      color: const Color(0xFF0F172A).withOpacity(0.88),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.white12),
+                      boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6)],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,24 +566,108 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
                         Row(
                           children: [
                             Container(
-                              width: 18,
-                              height: 18,
+                              width: 16,
+                              height: 16,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.redAccent, width: 1.5),
                               ),
                               child: const Center(
-                                child: Text('N', style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+                                child: Text('N',
+                                    style: TextStyle(color: Colors.redAccent, fontSize: 9, fontWeight: FontWeight.bold)),
                               ),
                             ),
                             const SizedBox(width: 6),
-                            const Text('TACTICAL GRID', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+                            Text(
+                              _mapStyle == NavMapStyle.dark
+                                  ? 'REAL TACTICAL MAP'
+                                  : (_mapStyle == NavMapStyle.satellite ? 'SATELLITE MAP' : 'OSM STREET MAP'),
+                              style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 2),
-                        const Text('GPS LOCK: ACTIVE', style: TextStyle(color: Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                        const Text('REAL-TIME GPS: ACTIVE',
+                            style: TextStyle(color: Colors.greenAccent, fontSize: 8, fontWeight: FontWeight.bold)),
                       ],
                     ),
+                  ),
+                ),
+
+                // Map Control Tools (Recenter, Layer Switcher, Zoom Buttons)
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Column(
+                    children: [
+                      // Map Layer Switcher
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A).withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            _mapStyle == NavMapStyle.satellite
+                                ? Icons.satellite_alt
+                                : (_mapStyle == NavMapStyle.standard ? Icons.map : Icons.dark_mode),
+                            color: Colors.cyanAccent,
+                            size: 20,
+                          ),
+                          tooltip: 'Switch Map Layer',
+                          onPressed: _cycleMapStyle,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Fit Route Camera Button
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A).withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.center_focus_strong, color: Colors.greenAccent, size: 20),
+                          tooltip: 'Fit Full Route',
+                          onPressed: _fitRoute,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Zoom In
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A).withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                          tooltip: 'Zoom In',
+                          onPressed: () {
+                            final zoom = _mapController.camera.zoom;
+                            _mapController.move(_mapController.camera.center, zoom + 1.0);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Zoom Out
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A).withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.remove, color: Colors.white, size: 20),
+                          tooltip: 'Zoom Out',
+                          onPressed: () {
+                            final zoom = _mapController.camera.zoom;
+                            _mapController.move(_mapController.camera.center, zoom - 1.0);
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -377,7 +734,8 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
                                 const SizedBox(height: 2),
                                 Text(
                                   currentStep.instruction,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -397,7 +755,8 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
                               ),
                               IconButton(
                                 icon: const Icon(Icons.chevron_right, color: Colors.white),
-                                onPressed: _currentStepIndex < _route.instructions.length - 1 ? _nextStep : null,
+                                onPressed:
+                                    _currentStepIndex < _route.instructions.length - 1 ? _nextStep : null,
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                 padding: EdgeInsets.zero,
                               ),
@@ -495,11 +854,12 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
                                     ),
                                     child: const Text(
                                       'CURRENT',
-                                      style: TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold),
+                                      style: TextStyle(
+                                          color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold),
                                     ),
                                   )
                                 : const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white24),
-                            onTap: () => setState(() => _currentStepIndex = idx),
+                            onTap: () => _selectStep(idx),
                           ),
                         );
                       },
@@ -521,7 +881,8 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
                           );
                         },
                         icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('ARRIVED / END NAVIGATION', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                        label: const Text('ARRIVED / END NAVIGATION',
+                            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green.shade700,
                           foregroundColor: Colors.white,
@@ -552,250 +913,4 @@ class _NavigationScreenState extends State<NavigationScreen> with SingleTickerPr
         return Icons.navigation;
     }
   }
-}
-
-class RoutePainter extends CustomPainter {
-  final NavigationRoute route;
-  final double userLat;
-  final double userLon;
-  final int activeStepIndex;
-  final double pulseValue;
-
-  RoutePainter({
-    required this.route,
-    required this.userLat,
-    required this.userLon,
-    this.activeStepIndex = 0,
-    this.pulseValue = 0.5,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-
-    // Compute route center & span with aspect ratio preservation
-    final midLat = (userLat + route.destLat) / 2;
-    final midLon = (userLon + route.destLon) / 2;
-
-    final latDist = (userLat - route.destLat).abs();
-    final lonDist = (userLon - route.destLon).abs();
-    final maxSpan = max(max(latDist, lonDist), 0.003) * 1.55;
-
-    final scaleX = (size.width * 0.72) / maxSpan;
-    final scaleY = (size.height * 0.72) / maxSpan;
-    final scale = min(scaleX, scaleY);
-
-    Offset toCanvasPos(double lat, double lon) {
-      final dx = (lon - midLon) * scale;
-      final dy = -(lat - midLat) * scale;
-      return center + Offset(dx, dy);
-    }
-
-    // 1. Tactical Grid Lines
-    final gridPaint = Paint()
-      ..color = const Color(0xFF1E293B).withOpacity(0.4)
-      ..strokeWidth = 1.0;
-    const double gridSize = 35.0;
-    for (double x = 0; x <= size.width; x += gridSize) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (double y = 0; y <= size.height; y += gridSize) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    // 2. Simulated Urban Street Network (Corridors)
-    final streetPaint = Paint()
-      ..color = const Color(0xFF334155).withOpacity(0.3)
-      ..strokeWidth = 6.0;
-
-    // Background reference street axes
-    canvas.drawLine(Offset(0, center.dy - 60), Offset(size.width, center.dy - 60), streetPaint);
-    canvas.drawLine(Offset(0, center.dy + 70), Offset(size.width, center.dy + 70), streetPaint);
-    canvas.drawLine(Offset(center.dx - 80, 0), Offset(center.dx - 80, size.height), streetPaint);
-    canvas.drawLine(Offset(center.dx + 80, 0), Offset(center.dx + 80, size.height), streetPaint);
-
-    // Street Corridor Labels
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    void drawStreetLabel(String text, Offset pos) {
-      textPainter.text = TextSpan(
-        text: text,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.2),
-          fontSize: 9,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 1.0,
-        ),
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, pos);
-    }
-
-    drawStreetLabel('CIVIC RESCUE CORRIDOR', Offset(16, center.dy - 74));
-    drawStreetLabel('MISSION TRANSIT WAY', Offset(16, center.dy + 56));
-    drawStreetLabel('8TH ST ROUTE', Offset(center.dx - 74, 16));
-
-    // 3. Safe Evacuation Corridor Buffer (Glow band along polyline)
-    if (route.polylinePoints.isNotEmpty) {
-      final bufferPaint = Paint()
-        ..color = Colors.greenAccent.withOpacity(0.08)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 28.0
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-
-      final corridorPath = Path();
-      final p0 = toCanvasPos(route.polylinePoints.first.latitude, route.polylinePoints.first.longitude);
-      corridorPath.moveTo(p0.dx, p0.dy);
-      for (int i = 1; i < route.polylinePoints.length; i++) {
-        final pi = toCanvasPos(route.polylinePoints[i].latitude, route.polylinePoints[i].longitude);
-        corridorPath.lineTo(pi.dx, pi.dy);
-      }
-      canvas.drawPath(corridorPath, bufferPaint);
-
-      // Outer route glow
-      final routeGlow = Paint()
-        ..color = Colors.cyanAccent.withOpacity(0.25)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 10.0
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-      canvas.drawPath(corridorPath, routeGlow);
-
-      // Core route line
-      final routeLine = Paint()
-        ..color = const Color(0xFF00E5FF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4.0
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-      canvas.drawPath(corridorPath, routeLine);
-
-      // 4. Directional Chevrons along route segments
-      final chevronPaint = Paint()
-        ..color = Colors.white.withOpacity(0.9)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0
-        ..strokeCap = StrokeCap.round;
-
-      for (int i = 0; i < route.polylinePoints.length - 1; i++) {
-        final start = toCanvasPos(route.polylinePoints[i].latitude, route.polylinePoints[i].longitude);
-        final end = toCanvasPos(route.polylinePoints[i + 1].latitude, route.polylinePoints[i + 1].longitude);
-
-        final mid = Offset((start.dx + end.dx) / 2, (start.dy + end.dy) / 2);
-        final angle = atan2(end.dy - start.dy, end.dx - start.dx);
-
-        const arrowLen = 6.0;
-        final pA = mid - Offset(arrowLen * cos(angle - 0.5), arrowLen * sin(angle - 0.5));
-        final pB = mid - Offset(arrowLen * cos(angle + 0.5), arrowLen * sin(angle + 0.5));
-
-        canvas.drawLine(pA, mid, chevronPaint);
-        canvas.drawLine(pB, mid, chevronPaint);
-      }
-
-      // 5. Waypoint Turn Indicators (Steps 1 to 4)
-      final stepIndices = [0, 2, 4, route.polylinePoints.length - 1];
-      for (int s = 0; s < stepIndices.length && s < route.instructions.length; s++) {
-        final ptIdx = stepIndices[s].clamp(0, route.polylinePoints.length - 1);
-        final pt = route.polylinePoints[ptIdx];
-        final pos = toCanvasPos(pt.latitude, pt.longitude);
-        final isStepActive = (s == activeStepIndex);
-
-        if (isStepActive) {
-          // Animated Pulse around active waypoint
-          final activePulsePaint = Paint()
-            ..color = Colors.cyanAccent.withOpacity((1.0 - pulseValue).clamp(0.0, 0.6))
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2.0;
-          canvas.drawCircle(pos, 12 + (pulseValue * 10), activePulsePaint);
-        }
-
-        // Draw waypoint bubble
-        final wpBgPaint = Paint()..color = isStepActive ? Colors.cyanAccent : const Color(0xFF1E293B);
-        final wpBorderPaint = Paint()
-          ..color = isStepActive ? Colors.white : Colors.cyanAccent.withOpacity(0.7)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5;
-
-        canvas.drawCircle(pos, 7, wpBgPaint);
-        canvas.drawCircle(pos, 7, wpBorderPaint);
-
-        // Step number text inside waypoint
-        final numPainter = TextPainter(
-          text: TextSpan(
-            text: '${s + 1}',
-            style: TextStyle(
-              color: isStepActive ? Colors.black : Colors.white,
-              fontSize: 8,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        );
-        numPainter.layout();
-        numPainter.paint(canvas, pos - Offset(numPainter.width / 2, numPainter.height / 2));
-      }
-    }
-
-    // 6. User Origin Pin (YOU)
-    final userPos = toCanvasPos(userLat, userLon);
-    final userPulsePaint = Paint()
-      ..color = Colors.greenAccent.withOpacity((0.4 * (1.0 - pulseValue * 0.5)).clamp(0.1, 0.4))
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(userPos, 16 + (pulseValue * 6), userPulsePaint);
-
-    final userCorePaint = Paint()..color = Colors.greenAccent;
-    canvas.drawCircle(userPos, 8, userCorePaint);
-    final userWhitePaint = Paint()..color = Colors.white;
-    canvas.drawCircle(userPos, 3, userWhitePaint);
-
-    // Draw "YOU" label
-    final youPainter = TextPainter(
-      text: const TextSpan(
-        text: 'YOU (START)',
-        style: TextStyle(
-          color: Colors.greenAccent,
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          backgroundColor: Color(0xFF0F172A),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    youPainter.layout();
-    youPainter.paint(canvas, userPos + const Offset(-24, 12));
-
-    // 7. Shelter Destination Pin
-    final destPos = toCanvasPos(route.destLat, route.destLon);
-    final destPulsePaint = Paint()
-      ..color = Colors.redAccent.withOpacity(0.3)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(destPos, 18, destPulsePaint);
-
-    final destCorePaint = Paint()..color = const Color(0xFFFF3366);
-    canvas.drawCircle(destPos, 9, destCorePaint);
-    final destWhiteCross = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 2.0;
-    canvas.drawLine(destPos + const Offset(-4, 0), destPos + const Offset(4, 0), destWhiteCross);
-    canvas.drawLine(destPos + const Offset(0, -4), destPos + const Offset(0, 4), destWhiteCross);
-
-    // Draw "SHELTER" badge
-    final shelterPainter = TextPainter(
-      text: TextSpan(
-        text: route.destinationName.toUpperCase(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          backgroundColor: Color(0xFFDC2626),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    shelterPainter.layout();
-    shelterPainter.paint(canvas, destPos + const Offset(-20, -22));
-  }
-
-  @override
-  bool shouldRepaint(covariant RoutePainter oldDelegate) => true;
 }

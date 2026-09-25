@@ -237,6 +237,58 @@ class DatabaseHelper {
     return sheltersWithDistance;
   }
 
+  /// Synchronizes shelters from backend list into local SQLite cache.
+  /// Upserts all server shelters and removes any obsolete shelters no longer on the server.
+  Future<int> syncSheltersFromServer(List<dynamic> serverShelters) async {
+    final db = await instance.database;
+    final Set<String> serverIds = {};
+    int count = 0;
+
+    await db.transaction((txn) async {
+      for (final raw in serverShelters) {
+        if (raw is! Map) continue;
+        final s = Map<String, dynamic>.from(raw);
+        final id = s['id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        serverIds.add(id);
+
+        final equipment = s['equipment_json'];
+        final equipmentStr = equipment is String ? equipment : jsonEncode(equipment ?? {});
+
+        await txn.insert(
+          'shelters',
+          {
+            'id': id,
+            'name': s['name']?.toString() ?? 'Unnamed Shelter',
+            'latitude': (s['latitude'] as num?)?.toDouble() ?? 0.0,
+            'longitude': (s['longitude'] as num?)?.toDouble() ?? 0.0,
+            'capacity': (s['capacity'] as num?)?.toInt() ?? 100,
+            'current_occupancy': (s['current_occupancy'] as num?)?.toInt() ?? 0,
+            'hazard_rating': (s['hazard_rating'] as num?)?.toInt() ?? 0,
+            'equipment_json': equipmentStr,
+            'updated_at': s['updated_at']?.toString() ?? DateTime.now().toIso8601String(),
+            'vector_clock': jsonEncode({'server_synced': 1}),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        count++;
+      }
+
+      // If the server returned valid shelters, prune local shelters that were deleted from server
+      if (serverIds.isNotEmpty) {
+        final existingLocal = await txn.query('shelters', columns: ['id']);
+        for (final row in existingLocal) {
+          final localId = row['id'] as String;
+          if (!serverIds.contains(localId)) {
+            await txn.delete('shelters', where: 'id = ?', whereArgs: [localId]);
+          }
+        }
+      }
+    });
+
+    return count;
+  }
+
   /// Queues an entity mutation into local sync queue
   Future<int> queueSyncOperation({
     required String entityType,

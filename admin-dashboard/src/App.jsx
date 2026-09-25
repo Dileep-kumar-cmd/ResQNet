@@ -25,7 +25,8 @@ import {
   X,
   Volume2,
   VolumeX,
-  BellRing
+  BellRing,
+  Trash2
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -106,9 +107,9 @@ export default function App() {
         osc2.type = 'sine';
         osc2.frequency.setValueAtTime(fundamentalFreq / 2, startTime);
 
-        // Amplitude envelope (fast attack, sustained resonance, decay)
+        // Amplitude envelope (fast attack, sustained resonance, decay at 100% volume)
         gain.gain.setValueAtTime(0.001, startTime);
-        gain.gain.linearRampToValueAtTime(0.7, startTime + 0.03);
+        gain.gain.linearRampToValueAtTime(1.0, startTime + 0.03);
         gain.gain.exponentialRampToValueAtTime(0.001, stopTime);
 
         osc1.connect(filter);
@@ -243,6 +244,26 @@ export default function App() {
       }
     } catch (e) {
       console.error('Failed to update occupancy', e);
+    }
+  };
+
+  // Delete shelter
+  const handleDeleteShelter = async (shelterId, shelterName) => {
+    if (!window.confirm(`Are you sure you want to remove shelter "${shelterName || shelterId}"? This will delete it across the network.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/shelters/${shelterId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchAdminData();
+      } else {
+        alert('Failed to delete shelter from server.');
+      }
+    } catch (e) {
+      console.error('Failed to delete shelter', e);
+      alert('Error deleting shelter: ' + e.message);
     }
   };
 
@@ -802,6 +823,7 @@ export default function App() {
                     <th>Hazard</th>
                     <th>Stock / Supplies</th>
                     <th>Quick Adjust</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -866,6 +888,17 @@ export default function App() {
                               +10
                             </button>
                           </div>
+                        </td>
+                        <td>
+                          <button 
+                            className="btn btn-secondary btn-sm"
+                            style={{ color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.3)', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            onClick={() => handleDeleteShelter(s.id, s.name)}
+                            title={`Delete shelter ${s.name}`}
+                          >
+                            <Trash2 size={13} />
+                            <span>Delete</span>
+                          </button>
                         </td>
                       </tr>
                     );

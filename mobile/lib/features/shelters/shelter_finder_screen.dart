@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/features/shelters/shelter_ranking_service.dart';
 import 'package:mobile/features/navigation/navigation_screen.dart';
 import 'package:mobile/features/home/global_connectivity_banner.dart';
+import 'package:mobile/features/sync/sync_service.dart';
 
 class ShelterFinderScreen extends StatefulWidget {
   const ShelterFinderScreen({super.key});
@@ -29,6 +30,10 @@ class _ShelterFinderScreenState extends State<ShelterFinderScreen> {
     final stopwatch = Stopwatch()..start();
     setState(() => _isLoading = true);
 
+    try {
+      await SyncService.instance.pullSheltersFromServer();
+    } catch (_) {}
+
     final results = await ShelterRankingService.instance.rankShelters(
       userLat: _userLat,
       userLon: _userLon,
@@ -36,11 +41,13 @@ class _ShelterFinderScreenState extends State<ShelterFinderScreen> {
 
     stopwatch.stop();
 
-    setState(() {
-      _rankedShelters = results;
-      _executionMs = stopwatch.elapsedMilliseconds;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _rankedShelters = results;
+        _executionMs = stopwatch.elapsedMilliseconds;
+        _isLoading = false;
+      });
+    }
   }
 
   void _navigateToShelter(RankedShelter s) {
@@ -208,10 +215,12 @@ class _ShelterFinderScreenState extends State<ShelterFinderScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : filtered.isEmpty
                     ? const Center(child: Text('No shelters match current filter.'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: filtered.length,
-                        itemBuilder: (context, idx) {
+                    : RefreshIndicator(
+                        onRefresh: _computeRankings,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, idx) {
                           final s = filtered[idx];
                           final int rankNum = idx + 1;
                           final double occPercent = (s.currentOccupancy / s.capacity).clamp(0.0, 1.0);
@@ -338,6 +347,7 @@ class _ShelterFinderScreenState extends State<ShelterFinderScreen> {
                           );
                         },
                       ),
+                    ),
           ),
         ],
       ),

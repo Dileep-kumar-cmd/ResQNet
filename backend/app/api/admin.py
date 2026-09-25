@@ -125,6 +125,16 @@ async def update_admin_shelter(shelter_id: str, payload: ShelterUpdate, db: Asyn
         "updated_at": shelter.updated_at.isoformat() if shelter.updated_at else None
     }
 
+@router.delete("/shelters/{shelter_id}")
+async def delete_admin_shelter(shelter_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Shelter).filter(Shelter.id == shelter_id))
+    shelter = result.scalars().first()
+    if not shelter:
+        raise HTTPException(status_code=404, detail="Shelter not found")
+    await db.delete(shelter)
+    await db.commit()
+    return {"status": "success", "message": f"Shelter {shelter_id} deleted"}
+
 @router.get("/sos_logs")
 async def get_admin_sos_logs(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(SOSLog).order_by(SOSLog.timestamp.desc()))

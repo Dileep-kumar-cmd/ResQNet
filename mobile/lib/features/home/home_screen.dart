@@ -276,14 +276,27 @@ class _EmergencyHqTabState extends State<EmergencyHqTab> {
   Future<void> _refreshData() async {
     setState(() => _isLoading = true);
     final db = DatabaseHelper.instance;
-    final shelters = await db.getNearbyShelters(_userLat, _userLon);
+    var shelters = await db.getNearbyShelters(_userLat, _userLon);
     final syncQueue = await db.getPendingSyncItems();
 
-    setState(() {
-      _nearbyShelters = shelters;
-      _pendingSyncItems = syncQueue;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _nearbyShelters = shelters;
+        _pendingSyncItems = syncQueue;
+        _isLoading = false;
+      });
+    }
+
+    // Background pull from cloud to sync any admin-added/removed shelters
+    try {
+      final updated = await SyncService.instance.pullSheltersFromServer();
+      if (updated > 0 && mounted) {
+        shelters = await db.getNearbyShelters(_userLat, _userLon);
+        setState(() {
+          _nearbyShelters = shelters;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _triggerCloudSync() async {

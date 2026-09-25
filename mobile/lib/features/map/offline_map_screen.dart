@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile/data/local/database_helper.dart';
 import 'package:mobile/features/navigation/navigation_screen.dart';
 import 'package:mobile/features/home/global_connectivity_banner.dart';
+import 'package:mobile/features/sync/sync_service.dart';
 
 enum MapViewMode { vector, satellite, topographic }
 
@@ -191,6 +192,10 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
         });
         return;
       }
+
+      try {
+        await SyncService.instance.pullSheltersFromServer();
+      } catch (_) {}
 
       final db = await DatabaseHelper.instance.database;
       final shelters = await db.query('shelters');

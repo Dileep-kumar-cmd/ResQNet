@@ -31,6 +31,8 @@ class CRDTMergeEngine:
         for change in changes:
             entity_type = change.get("entity_type")
             entity_id = change.get("entity_id")
+            if not entity_id or not isinstance(entity_id, str):
+                continue
             payload = change.get("payload", {})
             v_clock = change.get("vector_clock", {})
 

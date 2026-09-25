@@ -22,7 +22,7 @@ async def test_supabase():
         print("[1/3] Testing network connection to PostgreSQL / Supabase...")
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT version();"))
-            version_str = result.scalar()
+            version_str = str(result.scalar() or "Unknown")
             print(f"       Connected successfully!")
             print(f"       Postgres version: {version_str[:50]}...")
 
